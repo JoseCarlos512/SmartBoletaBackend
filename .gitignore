@@ -1,0 +1,23 @@
+# Archivos de Visual Studio y temporales
+.vs/
+*.user
+*.suo
+*.cache
+*.log
+*.tmp
+
+# Carpetas de compilación
+bin/
+obj/
+*/bin/
+*/obj/
+
+# Archivos generados automáticamente
+*.dll
+*.exe
+*.pdb
+*.dbmdl
+*.vsidx
+
+# Configuración de usuario de VSCode
+.vscode/
