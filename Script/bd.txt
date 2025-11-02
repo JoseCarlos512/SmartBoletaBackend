@@ -1,0 +1,256 @@
+/* ==========================================================
+   MiBoleta - DDL Base (SQL Server)
+   Esquema: dbo
+   ========================================================== */
+
+   
+   
+
+SET XACT_ABORT ON;
+BEGIN TRAN;
+
+
+-------------------------------------------------------------
+-- TENANTS
+-------------------------------------------------------------
+IF OBJECT_ID('dbo.Tenants', 'U') IS NULL
+CREATE TABLE dbo.Tenants (
+    TenantId       UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID() PRIMARY KEY,
+    NombreComercial NVARCHAR(150)   NOT NULL,
+    RUC            NVARCHAR(20)     NULL,
+    DominioOpcional NVARCHAR(150)   NULL,
+    LogoUrl        NVARCHAR(500)    NULL,
+    ColorPrimario  NVARCHAR(20)     NULL,
+    FaviconUrl     NVARCHAR(500)    NULL,
+    Estado         TINYINT          NOT NULL DEFAULT 1, -- 1 Activo, 0 Inactivo
+    CreatedAt      DATETIME2        NOT NULL DEFAULT SYSDATETIME(),
+    UpdatedAt      DATETIME2        NULL
+);
+
+-------------------------------------------------------------
+-- USUARIOS / ROLES / USER_ROLES
+-------------------------------------------------------------
+IF OBJECT_ID('dbo.Usuarios', 'U') IS NULL
+CREATE TABLE dbo.Usuarios (
+    UserId           UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID() PRIMARY KEY,
+    TenantId         UNIQUEIDENTIFIER NOT NULL,
+    UserName         NVARCHAR(100)    NOT NULL,
+    Email            NVARCHAR(200)    NULL,
+    DNI              NVARCHAR(20)     NULL,
+    PasswordHash     VARBINARY(MAX)   NOT NULL,
+    PasswordSalt     VARBINARY(MAX)   NOT NULL,
+    IsActive         BIT              NOT NULL DEFAULT 1,
+    ConcurrencyStamp ROWVERSION       NOT NULL,
+    CreatedAt        DATETIME2        NOT NULL DEFAULT SYSDATETIME(),
+    UpdatedAt        DATETIME2        NULL,
+    CONSTRAINT FK_Usuarios_Tenants FOREIGN KEY (TenantId) REFERENCES dbo.Tenants(TenantId),
+    CONSTRAINT UQ_Usuarios_Tenant_UserName UNIQUE (TenantId, UserName),
+    CONSTRAINT UQ_Usuarios_Tenant_Email UNIQUE (TenantId, Email)
+);
+
+IF OBJECT_ID('dbo.Roles', 'U') IS NULL
+CREATE TABLE dbo.Roles (
+    RoleId      UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID() PRIMARY KEY,
+    TenantId    UNIQUEIDENTIFIER NOT NULL,
+    Name        NVARCHAR(80)     NOT NULL,
+    Description NVARCHAR(200)    NULL,
+    CONSTRAINT FK_Roles_Tenants FOREIGN KEY (TenantId) REFERENCES dbo.Tenants(TenantId),
+    CONSTRAINT UQ_Roles_Tenant_Name UNIQUE (TenantId, Name)
+);
+
+IF OBJECT_ID('dbo.UserRoles', 'U') IS NULL
+CREATE TABLE dbo.UserRoles (
+    UserId UNIQUEIDENTIFIER NOT NULL,
+    RoleId UNIQUEIDENTIFIER NOT NULL,
+    PRIMARY KEY (UserId, RoleId),
+    CONSTRAINT FK_UserRoles_Usuarios FOREIGN KEY (UserId) REFERENCES dbo.Usuarios(UserId),
+    CONSTRAINT FK_UserRoles_Roles FOREIGN KEY (RoleId) REFERENCES dbo.Roles(RoleId)
+);
+
+-------------------------------------------------------------
+-- EMPLEADOS
+-------------------------------------------------------------
+IF OBJECT_ID('dbo.Empleados', 'U') IS NULL
+CREATE TABLE dbo.Empleados (
+    EmpleadoId   UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID() PRIMARY KEY,
+    TenantId     UNIQUEIDENTIFIER NOT NULL,
+    UserId       UNIQUEIDENTIFIER NULL, -- si el empleado usa portal
+    DNI          NVARCHAR(20)     NOT NULL,
+    CodigoInterno NVARCHAR(30)    NULL,
+    EmailLaboral NVARCHAR(200)    NULL,
+    Area         NVARCHAR(120)    NULL,
+    Cargo        NVARCHAR(120)    NULL,
+    Estado       TINYINT          NOT NULL DEFAULT 1, -- 1 Activo, 0 Baja
+    FechaIngreso DATE             NULL,
+    FechaCese    DATE             NULL,
+    CONSTRAINT FK_Empleados_Tenants FOREIGN KEY (TenantId) REFERENCES dbo.Tenants(TenantId),
+    CONSTRAINT FK_Empleados_Usuarios FOREIGN KEY (UserId)   REFERENCES dbo.Usuarios(UserId),
+    CONSTRAINT UQ_Empleados_Tenant_DNI UNIQUE (TenantId, DNI)
+);
+CREATE INDEX IX_Empleados_Tenant_Email ON dbo.Empleados(TenantId, EmailLaboral);
+
+-------------------------------------------------------------
+-- CATEGORÍAS DE DOCUMENTO
+-------------------------------------------------------------
+IF OBJECT_ID('dbo.CategoriasDocumento', 'U') IS NULL
+CREATE TABLE dbo.CategoriasDocumento (
+    CategoriaId UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID() PRIMARY KEY,
+    TenantId    UNIQUEIDENTIFIER NOT NULL,
+    Nombre      NVARCHAR(120)    NOT NULL,
+    Slug        NVARCHAR(120)    NULL,
+    Orden       INT              NOT NULL DEFAULT 0,
+    CONSTRAINT FK_Categorias_Tenants FOREIGN KEY (TenantId) REFERENCES dbo.Tenants(TenantId),
+    CONSTRAINT UQ_Categorias_Tenant_Nombre UNIQUE (TenantId, Nombre)
+);
+
+-------------------------------------------------------------
+-- DOCUMENTOS (metadatos del archivo)
+-------------------------------------------------------------
+IF OBJECT_ID('dbo.Documentos', 'U') IS NULL
+CREATE TABLE dbo.Documentos (
+    DocumentoId    UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID() PRIMARY KEY,
+    TenantId       UNIQUEIDENTIFIER NOT NULL,
+    CategoriaId    UNIQUEIDENTIFIER NOT NULL,
+    Titulo         NVARCHAR(200)    NOT NULL,
+    Descripcion    NVARCHAR(500)    NULL,
+    StorageProvider NVARCHAR(50)    NOT NULL,  -- AZURE_BLOB / S3 / GCS / MEGA
+    StoragePath    NVARCHAR(500)    NOT NULL,  -- clave/ruta en la nube
+    FileName       NVARCHAR(260)    NOT NULL,
+    FileSize       BIGINT           NOT NULL,
+    MimeType       NVARCHAR(100)    NOT NULL,
+    Checksum       VARBINARY(32)    NULL,      -- SHA-256 opcional
+    Version        INT              NOT NULL DEFAULT 1,
+    IsEncrypted    BIT              NOT NULL DEFAULT 0,
+    CreatedBy      UNIQUEIDENTIFIER NOT NULL,
+    CreatedAt      DATETIME2        NOT NULL DEFAULT SYSDATETIME(),
+    UpdatedAt      DATETIME2        NULL,
+    CONSTRAINT FK_Documentos_Tenants    FOREIGN KEY (TenantId)    REFERENCES dbo.Tenants(TenantId),
+    CONSTRAINT FK_Documentos_Categorias FOREIGN KEY (CategoriaId)  REFERENCES dbo.CategoriasDocumento(CategoriaId),
+    CONSTRAINT FK_Documentos_Usuarios    FOREIGN KEY (CreatedBy)    REFERENCES dbo.Usuarios(UserId)
+);
+CREATE INDEX IX_Documentos_Tenant_Categoria_CreatedAt ON dbo.Documentos(TenantId, CategoriaId, CreatedAt);
+CREATE INDEX IX_Documentos_Tenant_StoragePath ON dbo.Documentos(TenantId, StoragePath);
+
+-------------------------------------------------------------
+-- ASIGNACIONES DE DOCUMENTO (documento -> empleado)
+-------------------------------------------------------------
+IF OBJECT_ID('dbo.AsignacionesDocumento', 'U') IS NULL
+CREATE TABLE dbo.AsignacionesDocumento (
+    AsignacionId     UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID() PRIMARY KEY,
+    TenantId         UNIQUEIDENTIFIER NOT NULL,
+    DocumentoId      UNIQUEIDENTIFIER NOT NULL,
+    EmpleadoId       UNIQUEIDENTIFIER NOT NULL,
+    RequiereFirma    BIT              NOT NULL DEFAULT 1,
+    FechaLimiteFirma DATETIME2        NULL,
+    Estado           TINYINT          NOT NULL DEFAULT 0, -- 0 Pendiente, 1 Firmado, 2 Vencido, 3 Anulado
+    FechaPublicacion DATETIME2        NOT NULL DEFAULT SYSDATETIME(),
+    PublicadoPor     UNIQUEIDENTIFIER NOT NULL,
+    CONSTRAINT FK_Asign_Tenants     FOREIGN KEY (TenantId)    REFERENCES dbo.Tenants(TenantId),
+    CONSTRAINT FK_Asign_Documentos  FOREIGN KEY (DocumentoId) REFERENCES dbo.Documentos(DocumentoId),
+    CONSTRAINT FK_Asign_Empleados   FOREIGN KEY (EmpleadoId)  REFERENCES dbo.Empleados(EmpleadoId),
+    CONSTRAINT FK_Asign_PublicaUser FOREIGN KEY (PublicadoPor) REFERENCES dbo.Usuarios(UserId),
+    CONSTRAINT UQ_Asign_Tenant_Doc_Emp UNIQUE (TenantId, DocumentoId, EmpleadoId)
+);
+CREATE INDEX IX_Asign_Tenant_Empleado_Estado ON dbo.AsignacionesDocumento(TenantId, EmpleadoId, Estado);
+
+-------------------------------------------------------------
+-- FIRMAS (evidencias)
+-------------------------------------------------------------
+IF OBJECT_ID('dbo.Firmas', 'U') IS NULL
+CREATE TABLE dbo.Firmas (
+    FirmaId               UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID() PRIMARY KEY,
+    TenantId              UNIQUEIDENTIFIER NOT NULL,
+    AsignacionId          UNIQUEIDENTIFIER NOT NULL,
+    EmpleadoId            UNIQUEIDENTIFIER NOT NULL,
+    TipoFirma             NVARCHAR(30)     NOT NULL,  -- SIMPLE_CLICK, BIOMETRICA, etc.
+    FechaHora             DATETIME2        NOT NULL DEFAULT SYSDATETIME(),
+    IpAddress             NVARCHAR(64)     NULL,
+    UserAgent             NVARCHAR(256)    NULL,
+    HashDocumentoAlFirmar VARBINARY(32)    NULL,      -- SHA-256 del binario en el momento de firma
+    CONSTRAINT FK_Firmas_Tenants FOREIGN KEY (TenantId)    REFERENCES dbo.Tenants(TenantId),
+    CONSTRAINT FK_Firmas_Asign   FOREIGN KEY (AsignacionId) REFERENCES dbo.AsignacionesDocumento(AsignacionId),
+    CONSTRAINT FK_Firmas_Emp     FOREIGN KEY (EmpleadoId)   REFERENCES dbo.Empleados(EmpleadoId)
+);
+CREATE INDEX IX_Firmas_Tenant_Asignacion ON dbo.Firmas(TenantId, AsignacionId);
+
+-------------------------------------------------------------
+-- BITÁCORA / AUDITORÍA
+-------------------------------------------------------------
+IF OBJECT_ID('dbo.BitacoraEventos', 'U') IS NULL
+CREATE TABLE dbo.BitacoraEventos (
+    EventoId    UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID() PRIMARY KEY,
+    TenantId    UNIQUEIDENTIFIER NOT NULL,
+    DocumentoId UNIQUEIDENTIFIER NULL,
+    UserId      UNIQUEIDENTIFIER NULL,
+    EmpleadoId  UNIQUEIDENTIFIER NULL,
+    Tipo        NVARCHAR(40)     NOT NULL,  -- LOGIN, DOC_VIEW, DOC_DOWNLOAD, DOC_PUBLISH, DOC_SIGN, etc.
+    DetalleJSON NVARCHAR(MAX)    NULL,
+    FechaHora   DATETIME2        NOT NULL DEFAULT SYSDATETIME(),
+    CONSTRAINT FK_Bitacora_Tenants    FOREIGN KEY (TenantId)    REFERENCES dbo.Tenants(TenantId),
+    CONSTRAINT FK_Bitacora_Documentos FOREIGN KEY (DocumentoId) REFERENCES dbo.Documentos(DocumentoId),
+    CONSTRAINT FK_Bitacora_Usuarios   FOREIGN KEY (UserId)      REFERENCES dbo.Usuarios(UserId),
+    CONSTRAINT FK_Bitacora_Empleados  FOREIGN KEY (EmpleadoId)  REFERENCES dbo.Empleados(EmpleadoId)
+);
+CREATE INDEX IX_Bitacora_Tenant_Tipo_Fecha ON dbo.BitacoraEventos(TenantId, Tipo, FechaHora DESC);
+
+-------------------------------------------------------------
+-- NOTIFICACIONES (correo)
+-------------------------------------------------------------
+IF OBJECT_ID('dbo.NotificacionesCorreo', 'U') IS NULL
+CREATE TABLE dbo.NotificacionesCorreo (
+    NotificacionId   UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID() PRIMARY KEY,
+    TenantId         UNIQUEIDENTIFIER NOT NULL,
+    AsignacionId     UNIQUEIDENTIFIER NOT NULL,
+    ToEmail          NVARCHAR(200)    NOT NULL,
+    Subject          NVARCHAR(200)    NOT NULL,
+    Body             NVARCHAR(MAX)    NOT NULL,
+    Estado           NVARCHAR(20)     NOT NULL DEFAULT 'PENDIENTE', -- PENDIENTE, ENVIADO, ERROR
+    Intentos         INT              NOT NULL DEFAULT 0,
+    LastAttemptAt    DATETIME2        NULL,
+    ProviderMessageId NVARCHAR(200)   NULL,
+    CONSTRAINT FK_Notif_Tenants FOREIGN KEY (TenantId)    REFERENCES dbo.Tenants(TenantId),
+    CONSTRAINT FK_Notif_Asign  FOREIGN KEY (AsignacionId) REFERENCES dbo.AsignacionesDocumento(AsignacionId)
+);
+CREATE INDEX IX_Notif_Tenant_Estado ON dbo.NotificacionesCorreo(TenantId, Estado);
+
+-------------------------------------------------------------
+-- LOTES DE CARGA (cabecera)
+-------------------------------------------------------------
+IF OBJECT_ID('dbo.LotesCarga', 'U') IS NULL
+CREATE TABLE dbo.LotesCarga (
+    LoteId         UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID() PRIMARY KEY,
+    TenantId       UNIQUEIDENTIFIER NOT NULL,
+    Tipo           NVARCHAR(50)     NOT NULL, -- BOLETAS_MASIVAS, CONTRATOS, etc.
+    ArchivoFuente  NVARCHAR(500)    NULL,
+    TotalRegistros INT              NOT NULL DEFAULT 0,
+    Procesados     INT              NOT NULL DEFAULT 0,
+    ConErrores     INT              NOT NULL DEFAULT 0,
+    Estado         NVARCHAR(20)     NOT NULL DEFAULT 'CARGADO', -- CARGADO, PROCESANDO, COMPLETADO, FALLIDO
+    SubidoPor      UNIQUEIDENTIFIER NOT NULL,
+    CreatedAt      DATETIME2        NOT NULL DEFAULT SYSDATETIME(),
+    UpdatedAt      DATETIME2        NULL,
+    CONSTRAINT FK_Lotes_Tenants FOREIGN KEY (TenantId) REFERENCES dbo.Tenants(TenantId),
+    CONSTRAINT FK_Lotes_Usuarios FOREIGN KEY (SubidoPor) REFERENCES dbo.Usuarios(UserId)
+);
+CREATE INDEX IX_Lotes_Tenant_Estado ON dbo.LotesCarga(TenantId, Estado);
+
+-------------------------------------------------------------
+-- DETALLE DE LOTE DE CARGA
+-------------------------------------------------------------
+IF OBJECT_ID('dbo.DetalleLoteCarga', 'U') IS NULL
+CREATE TABLE dbo.DetalleLoteCarga (
+    DetalleId        UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID() PRIMARY KEY,
+    LoteId           UNIQUEIDENTIFIER NOT NULL,
+    Linea            INT              NOT NULL,
+    DNI_Email        NVARCHAR(200)    NOT NULL, -- identificador del empleado origen (DNI o email)
+    CategoriaId      UNIQUEIDENTIFIER NULL,     -- categoría destino del documento
+    ArchivoAsociado  NVARCHAR(500)    NULL,     -- ruta/archivo dentro del ZIP o path original
+    Status           NVARCHAR(20)     NOT NULL DEFAULT 'PENDIENTE', -- PENDIENTE, OK, ERROR
+    MensajeError     NVARCHAR(500)    NULL,
+    CONSTRAINT FK_DetalleLote_Lote       FOREIGN KEY (LoteId)      REFERENCES dbo.LotesCarga(LoteId),
+    CONSTRAINT FK_DetalleLote_Categoria  FOREIGN KEY (CategoriaId) REFERENCES dbo.CategoriasDocumento(CategoriaId)
+);
+CREATE INDEX IX_DetalleLote_Lote_Status ON dbo.DetalleLoteCarga(LoteId, Status);
+
+COMMIT;
+GO
