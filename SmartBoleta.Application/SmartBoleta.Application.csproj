@@ -10,10 +10,17 @@
 		<!--<ProjectReference Include="..\..\core\Core.Mappy\Core.Mappy.csproj" />
 		<ProjectReference Include="..\..\core\Core.MediatOR\Core.MediatOR.csproj" />-->
 		<ProjectReference Include="..\SmartBoleta.Infrastructure\SmartBoleta.Infrastructure.csproj" />
+		<PackageReference Include="MediatR" Version="12.2.0" />
+    	<PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.9.2" />
 	</ItemGroup>
 
 	<ItemGroup>
 		<PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.11.0" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Folder Include="Modules\Tenants\DTOs\" />
+	  <Folder Include="Modules\Tenants\Query\" />
 	</ItemGroup>
 
 </Project>
