@@ -8,9 +8,11 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.7" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.4.0" />
   </ItemGroup>
 
     <ItemGroup>
 	    <ProjectReference Include="..\SmartBoleta.Application\SmartBoleta.Application.csproj" />
+      <ProjectReference Include="..\SmartBoleta.Infrastructure\SmartBoleta.Infrastructure.csproj" />
     </ItemGroup>
 </Project>
