@@ -1,5 +1,11 @@
 namespace SmartBoleta.Domain;
 public class BaseEntity
 {
-    public Guid Id { get; set; } = Guid.CreateVersion7();
+    protected BaseEntity(){}
+
+    protected BaseEntity(Guid id)
+    {
+        Id = id;
+    }
+    public Guid Id { get; init; }
 }
