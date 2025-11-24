@@ -9,6 +9,7 @@
 SET XACT_ABORT ON;
 BEGIN TRAN;
 
+Aqui terngo la configuracion de una tabla Tenant 
 
 -------------------------------------------------------------
 -- TENANTS
@@ -40,7 +41,7 @@ CREATE TABLE dbo.Usuarios (
     PasswordHash     VARBINARY(MAX)   NOT NULL,
     PasswordSalt     VARBINARY(MAX)   NOT NULL,
     IsActive         BIT              NOT NULL DEFAULT 1,
-    ConcurrencyStamp ROWVERSION       NOT NULL,
+    -- ConcurrencyStamp ROWVERSION       NOT NULL,
     CreatedAt        DATETIME2        NOT NULL DEFAULT SYSDATETIME(),
     UpdatedAt        DATETIME2        NULL,
     CONSTRAINT FK_Usuarios_Tenants FOREIGN KEY (TenantId) REFERENCES dbo.Tenants(TenantId),

@@ -32,6 +32,8 @@ public class Tenant : BaseEntity
     public string? CreatedPor { get; set; }
     public DateTime ActualizadoPor { get; set; } = DateTime.UtcNow;
 
+    public ICollection<Usuario>? Usuarios { get; set; }
+
     public static Tenant Create(
         string nombreComercial,
         string ruc,

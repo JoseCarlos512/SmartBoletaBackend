@@ -19,6 +19,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
+	  <Folder Include="Modules\Auths\Query\" />
 	  <Folder Include="Modules\Tenants\DTOs\" />
 	  <Folder Include="Modules\Tenants\Query\" />
 	</ItemGroup>
