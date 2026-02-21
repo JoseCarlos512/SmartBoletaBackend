@@ -1,4 +1,5 @@
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SmartBoleta.API.Controllers.Request;
 using SmartBoleta.Application.Modules.Tenants.Command;
@@ -8,6 +9,7 @@ namespace SmartBoleta.API.Controllers;
 
 [ApiController]
 [Route("api/tenants")]
+[Authorize]
 public class TenantController : ControllerBase
 {
     private readonly ISender _mediator;
@@ -24,7 +26,7 @@ public class TenantController : ControllerBase
     )
     {
         var query = new ObtenerTenantQuery(id);
-        var resultado = await _mediator.Send(query,cancellationToken);
+        var resultado = await _mediator.Send(query, cancellationToken);
         return resultado.IsSuccess ? Ok(resultado) : NotFound();
     }
 
@@ -52,11 +54,11 @@ public class TenantController : ControllerBase
             request.FaviconUrl!
         );
 
-        var resultado = await _mediator.Send(command,cancellationToken);
+        var resultado = await _mediator.Send(command, cancellationToken);
 
         if (resultado.IsSuccess)
         {
-            return CreatedAtAction(nameof(ObtenerTenants), new { id = resultado.Value } , resultado.Value );
+            return CreatedAtAction(nameof(ObtenerTenants), new { id = resultado.Value }, resultado.Value);
         }
         return BadRequest(resultado.Error);
     }

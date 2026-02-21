@@ -200,6 +200,12 @@ Opciones y recomendaciones:
 
 ---
 
+## Documento de brechas vs requerimientos
+
+- Revisión técnica y plan de implementación incremental: `docs/Backend-Requirement-Gap-Analysis.md`.
+
+---
+
 ## 17) Notas finales y próximos pasos rápidos
 
 * Priorizar diseño del **Domain** (agregados, invariantes) y definir contratos de los casos de uso.

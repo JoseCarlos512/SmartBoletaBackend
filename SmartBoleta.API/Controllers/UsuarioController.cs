@@ -1,6 +1,8 @@
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SmartBoleta.API.Controllers.Request;
+using SmartBoleta.API.Security;
 using SmartBoleta.Application.Modules.Usuarios.Command;
 using SmartBoleta.Application.Modules.Usuarios.Query;
 
@@ -8,23 +10,26 @@ namespace SmartBoleta.API.Controllers;
 
 [ApiController]
 [Route("api/Usuarios")]
+[Authorize]
 public class UsuarioController : ControllerBase
 {
     private readonly ISender _mediator;
+    private readonly ITenantContext _tenantContext;
 
-    public UsuarioController(ISender mediator)
+    public UsuarioController(ISender mediator, ITenantContext tenantContext)
     {
         _mediator = mediator;
+        _tenantContext = tenantContext;
     }
 
     [HttpGet("{id}")]
     public async Task<IActionResult> ObtenerUsuario(
-        Guid id, 
+        Guid id,
         CancellationToken cancellationToken
     )
     {
         var query = new ObtenerUsuarioQuery(id);
-        var resultado = await _mediator.Send(query,cancellationToken);
+        var resultado = await _mediator.Send(query, cancellationToken);
         return resultado.IsSuccess ? Ok(resultado) : NotFound();
     }
 
@@ -42,22 +47,26 @@ public class UsuarioController : ControllerBase
         CancellationToken cancellationToken
     )
     {
-        var tenantID = Guid.Parse(HttpContext.Request.Headers["TenantID"]);
+        var tenantId = _tenantContext.GetTenantId();
+        if (tenantId is null)
+        {
+            return BadRequest("No se encontró tenant en token/header TenantID.");
+        }
+
         var command = new CrearUsuarioCommand
         (
-            tenantID,
+            tenantId.Value,
             request.Nombre!,
             request.Correo!,
             request.DNI!
         );
 
-        var resultado = await _mediator.Send(command,cancellationToken);
+        var resultado = await _mediator.Send(command, cancellationToken);
 
         if (resultado.IsSuccess)
         {
-            return CreatedAtAction(nameof(ObtenerUsuarios), new { id = resultado.Value } , resultado.Value );
+            return CreatedAtAction(nameof(ObtenerUsuarios), new { id = resultado.Value }, resultado.Value);
         }
         return BadRequest(resultado.Error);
     }
-
 }
