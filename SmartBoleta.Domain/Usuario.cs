@@ -72,4 +72,10 @@ public static class UsuariosErrors
         "Usuarios.NotFound",
         "No existe un usuario con ese ID"
     );
+
+    public static Error InvalidCredentials = new
+    (
+        "Usuarios.InvalidCredentials",
+        "Las credenciales proporcionadas no son válidas"
+    );
 }

@@ -38,7 +38,7 @@ internal sealed class LoginCommandHandler : ICommandHandler<LoginCommand, LoginR
             .ObtenerUsuarioPorCorreo(request.Correo, cancellationToken);
         if (usuario is null)
         {
-            return Result.Failure<LoginResultDto>(UsuariosErrors.NotFound);
+            return Result.Failure<LoginResultDto>(UsuariosErrors.InvalidCredentials);
         }
 
         var passwordValido = _passwordHasher
@@ -46,7 +46,7 @@ internal sealed class LoginCommandHandler : ICommandHandler<LoginCommand, LoginR
 
         if (!passwordValido)
         {
-            // return Result.Failure<LoginResultDto>(UsuariosErrors.InvalidCredentials);
+            return Result.Failure<LoginResultDto>(UsuariosErrors.InvalidCredentials);
         }
 
         var token = _jwtTokenService.GenerateToken(
