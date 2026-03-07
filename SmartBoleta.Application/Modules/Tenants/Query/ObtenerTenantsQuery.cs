@@ -1,41 +1,40 @@
-
+using Dapper;
 using SmartBoleta.Application.Abstractions.Messaging;
 using SmartBoleta.Application.Modules.Tenants.DTOs;
 using SmartBoleta.Domain;
 using SmartBoleta.Domain.Abstractions;
-using SmartBoleta.Domain.IRepositories;
 
 namespace SmartBoleta.Application.Modules.Tenants.Query;
 
 public sealed record ObtenerTenantsQuery() : IQuery<List<TenantDto>>;
 
-public class ObtenerTenantsQueryHandler : IQueryHandler<ObtenerTenantsQuery, List<TenantDto>>
+internal sealed class ObtenerTenantsQueryHandler : IQueryHandler<ObtenerTenantsQuery, List<TenantDto>>
 {
-    private readonly ITenantRepository _tenantRepository;
-    public ObtenerTenantsQueryHandler(ITenantRepository TenantRepository)
+    private readonly ISqlConnectionFactory _connectionFactory;
+
+    public ObtenerTenantsQueryHandler(ISqlConnectionFactory connectionFactory)
     {
-        _tenantRepository = TenantRepository;
+        _connectionFactory = connectionFactory;
     }
+
     public async Task<Result<List<TenantDto>>> Handle(ObtenerTenantsQuery request, CancellationToken cancellationToken)
     {
+        using var connection = _connectionFactory.CreateConnection();
 
-        var tenants = await _tenantRepository.ObtenerTenants(cancellationToken);
+        var tenants = await connection.QueryAsync<TenantDto>(
+            """
+            SELECT TenantId   AS Id,
+                   NombreComercial,
+                   RUC        AS Ruc,
+                   LogoUrl,
+                   ColorPrimario,
+                   FaviconUrl
+            FROM   Tenants
+            WHERE  Estado = 1
+            ORDER BY NombreComercial
+            """
+        );
 
-        if (tenants is null || !tenants.Any())
-        {
-            return Result.Failure<List<TenantDto>>(TenantsErrors.NotFound);
-        }
-
-        var tenantDtos = tenants.Select(t => new TenantDto
-        {
-            Id = t.Id,
-            NombreComercial = t.NombreComercial,
-            Ruc = t.Ruc,
-            LogoUrl = t.LogoUrl,
-            ColorPrimario = t.ColorPrimario,
-            FaviconUrl = t.FaviconUrl
-        });
-
-        return Result.Success(tenantDtos.ToList());
+        return Result.Success(tenants.ToList());
     }
 }

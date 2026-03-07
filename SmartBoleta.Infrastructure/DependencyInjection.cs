@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using SmartBoleta.Domain.Abstractions;
 using SmartBoleta.Domain.Abstractions.Security;
 using SmartBoleta.Domain.IRepositories;
 using SmartBoleta.Infrastructure.Repositories;
@@ -24,6 +25,7 @@ public static class DependencyInjection
         services.Configure<JwtOptions>(configuration.GetSection("Jwt"));
 
 
+        services.AddScoped<ISqlConnectionFactory, SqlConnectionFactory>();
         services.AddScoped<ITenantRepository, TenantRepository>();
         services.AddScoped<IUsuarioRepository, UsuarioRepository>();
         services.AddScoped<IJwtTokenService, JwtTokenService>();
