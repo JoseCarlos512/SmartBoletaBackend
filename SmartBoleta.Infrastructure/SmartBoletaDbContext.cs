@@ -1,144 +1,136 @@
 using Microsoft.EntityFrameworkCore;
 using SmartBoleta.Domain;
-using System;
+using SmartBoleta.Domain.Enums;
 
-namespace SmartBoleta.Infrastructure
+namespace SmartBoleta.Infrastructure;
+
+public class SmartBoletaDbContext : DbContext
 {
-    public class SmartBoletaDbContext : DbContext
+    public SmartBoletaDbContext(DbContextOptions<SmartBoletaDbContext> options) : base(options) { }
+
+    public required DbSet<Tenant> Tenants { get; set; }
+    public required DbSet<Usuario> Usuarios { get; set; }
+    public required DbSet<Boleta> Boletas { get; set; }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        public SmartBoletaDbContext(DbContextOptions<SmartBoletaDbContext> options) : base(options) { }
+        base.OnModelCreating(modelBuilder);
 
-        public required DbSet<Tenant> Tenants { get; set; }
-        public required DbSet<Usuario> Usuarios { get; set; }
-
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        modelBuilder.Entity<Tenant>(entity =>
         {
-            base.OnModelCreating(modelBuilder);
+            entity.ToTable("Tenants");
+            entity.HasKey(e => e.Id).HasName("PK_Tenants");
+            entity.Property(e => e.Id)
+                  .HasColumnName("TenantId")
+                  .HasDefaultValueSql("NEWSEQUENTIALID()");
 
-            modelBuilder.Entity<Tenant>(entity =>
-            {
-                entity.ToTable("Tenants");
+            entity.Property(e => e.NombreComercial).IsRequired().HasMaxLength(150).HasColumnName("NombreComercial");
+            entity.Property(e => e.Ruc).HasMaxLength(20).HasColumnName("RUC");
+            entity.Property(e => e.LogoUrl).HasMaxLength(500).HasColumnName("LogoUrl");
+            entity.Property(e => e.ColorPrimario).HasMaxLength(20).HasColumnName("ColorPrimario");
+            entity.Property(e => e.FaviconUrl).HasMaxLength(500).HasColumnName("FaviconUrl");
 
-                // PK -> TenantId
-                entity.HasKey(e => e.Id).HasName("PK_Tenants");
-                entity.Property(e => e.Id)
-                      .HasColumnName("TenantId")
-                      .HasDefaultValueSql("NEWSEQUENTIALID()");
+            entity.Property(e => e.Estado)
+                  .HasConversion<byte>()
+                  .HasColumnType("TINYINT")
+                  .HasDefaultValue((byte)1)
+                  .HasColumnName("Estado");
 
-                // NombreComercial NVARCHAR(150) NOT NULL
-                entity.Property(e => e.NombreComercial)
-                      .IsRequired()
-                      .HasMaxLength(150)
-                      .HasColumnName("NombreComercial");
+            entity.Property<DateTime>("CreatedAt")
+                  .HasColumnType("DATETIME2")
+                  .HasDefaultValueSql("SYSDATETIME()")
+                  .ValueGeneratedOnAdd()
+                  .IsRequired();
 
-                // RUC NVARCHAR(20) NULL
-                entity.Property(e => e.Ruc)
-                      .HasMaxLength(20)
-                      .HasColumnName("RUC");
+            entity.Property<DateTime?>("UpdatedAt")
+                  .HasColumnType("DATETIME2")
+                  .HasColumnName("UpdatedAt")
+                  .IsRequired(false);
+        });
 
-                // LogoUrl NVARCHAR(500) NULL
-                entity.Property(e => e.LogoUrl)
-                      .HasMaxLength(500)
-                      .HasColumnName("LogoUrl");
+        modelBuilder.Entity<Usuario>(entity =>
+        {
+            entity.ToTable("Usuarios");
+            entity.HasKey(e => e.Id).HasName("PK_Usuarios");
+            entity.Property(e => e.Id)
+                  .HasColumnName("UsuarioId")
+                  .HasDefaultValueSql("NEWSEQUENTIALID()");
 
-                // ColorPrimario NVARCHAR(20) NULL
-                entity.Property(e => e.ColorPrimario)
-                      .HasMaxLength(20)
-                      .HasColumnName("ColorPrimario");
+            entity.Property(e => e.TenantId).IsRequired().HasColumnName("TenantId");
+            entity.HasOne(e => e.Tenant)
+                  .WithMany(t => t.Usuarios)
+                  .HasForeignKey(e => e.TenantId)
+                  .OnDelete(DeleteBehavior.NoAction)
+                  .HasConstraintName("FK_Usuarios_Tenants");
 
-                // FaviconUrl NVARCHAR(500) NULL
-                entity.Property(e => e.FaviconUrl)
-                      .HasMaxLength(500)
-                      .HasColumnName("FaviconUrl");
+            entity.Property(e => e.Nombre).IsRequired().HasMaxLength(150).HasColumnName("Nombre");
+            entity.Property(e => e.Correo).HasMaxLength(150).HasColumnName("Correo");
+            entity.Property(e => e.DNI).HasMaxLength(20).HasColumnName("DNI");
+            entity.Property(e => e.Rol).IsRequired().HasMaxLength(20).HasDefaultValue(Domain.Roles.User).HasColumnName("Rol");
 
-                // Estado TINYINT NOT NULL DEFAULT 1 (map boolean <-> tinyint)
-                entity.Property(e => e.Estado)
-                      .HasConversion<byte>()
-                      .HasColumnType("TINYINT")
-                      .HasDefaultValue((byte)1)
-                      .HasColumnName("Estado");
+            entity.Property(e => e.PasswordHash).IsRequired().HasColumnType("VARBINARY(MAX)").HasColumnName("PasswordHash");
+            entity.Property(e => e.PasswordSalt).IsRequired().HasColumnType("VARBINARY(MAX)").HasColumnName("PasswordSalt");
 
-                // CreatedAt / UpdatedAt: se configuran como propiedades (sombras si no existen en la entidad)
-                entity.Property<DateTime>("CreatedAt")
-                      .HasColumnType("DATETIME2")
-                      .HasDefaultValueSql("SYSDATETIME()")
-                      .ValueGeneratedOnAdd()
-                      .IsRequired();
+            entity.Property(e => e.Estado)
+                  .HasConversion<byte>()
+                  .HasColumnType("TINYINT")
+                  .HasDefaultValue((byte)1)
+                  .HasColumnName("Estado");
 
-                entity.Property<DateTime?>("UpdatedAt")
-                      .HasColumnType("DATETIME2")
-                      .HasColumnName("UpdatedAt")
-                      .IsRequired(false);
-            });
+            entity.Property(e => e.CreadoPor)
+                  .HasColumnType("DATETIME2")
+                  .HasColumnName("CreadoPor")
+                  .HasDefaultValueSql("SYSDATETIME()")
+                  .ValueGeneratedOnAdd()
+                  .IsRequired();
 
-            modelBuilder.Entity<Usuario>(entity =>
-            {
-                entity.ToTable("Usuarios");
+            entity.Property(e => e.ActualizadoPor)
+                  .HasColumnType("DATETIME2")
+                  .HasColumnName("ActualizadoPor")
+                  .IsRequired(false);
+        });
 
-                // PK -> UsuarioId
-                entity.HasKey(e => e.Id).HasName("PK_Usuarios");
-                entity.Property(e => e.Id)
-                      .HasColumnName("UsuarioId")
-                      .HasDefaultValueSql("NEWSEQUENTIALID()");
+        modelBuilder.Entity<Boleta>(entity =>
+        {
+            entity.ToTable("Boletas");
+            entity.HasKey(e => e.Id).HasName("PK_Boletas");
+            entity.Property(e => e.Id)
+                  .HasColumnName("BoletaId")
+                  .HasDefaultValueSql("NEWSEQUENTIALID()");
 
-                // TenantId FK
-                entity.Property(e => e.TenantId)
-                      .IsRequired()
-                      .HasColumnName("TenantId");
+            entity.Property(e => e.TenantId).IsRequired().HasColumnName("TenantId");
+            entity.HasOne(e => e.Tenant)
+                  .WithMany()
+                  .HasForeignKey(e => e.TenantId)
+                  .OnDelete(DeleteBehavior.NoAction)
+                  .HasConstraintName("FK_Boletas_Tenants");
 
-                entity.HasOne(e => e.Tenant)
-                      .WithMany()
-                      .HasForeignKey(e => e.TenantId)
-                      .OnDelete(DeleteBehavior.NoAction)
-                      .HasConstraintName("FK_Usuarios_Tenants");
+            entity.Property(e => e.UsuarioId).IsRequired().HasColumnName("UsuarioId");
+            entity.HasOne(e => e.Usuario)
+                  .WithMany(u => u.Boletas)
+                  .HasForeignKey(e => e.UsuarioId)
+                  .OnDelete(DeleteBehavior.NoAction)
+                  .HasConstraintName("FK_Boletas_Usuarios");
 
-                // Nombre NVARCHAR(150) NOT NULL
-                entity.Property(e => e.Nombre)
-                      .IsRequired()
-                      .HasMaxLength(150)
-                      .HasColumnName("Nombre");
+            entity.Property(e => e.Periodo).IsRequired().HasMaxLength(10).HasColumnName("Periodo");
+            entity.Property(e => e.ArchivoNombre).IsRequired().HasMaxLength(255).HasColumnName("ArchivoNombre");
+            entity.Property(e => e.ArchivoUrl).IsRequired().HasMaxLength(500).HasColumnName("ArchivoUrl");
 
-                // Correo NVARCHAR(150) NULL
-                entity.Property(e => e.Correo)
-                      .HasMaxLength(150)
-                      .HasColumnName("Correo");
+            entity.Property(e => e.Estado)
+                  .HasConversion<int>()
+                  .HasColumnName("Estado");
 
-                // DNI NVARCHAR(20) NULL
-                entity.Property(e => e.DNI)
-                      .HasMaxLength(20)
-                      .HasColumnName("DNI");
+            entity.Property(e => e.TextoOcr).HasColumnType("NVARCHAR(MAX)").HasColumnName("TextoOcr").IsRequired(false);
 
-                // PasswordHash / PasswordSalt VARBINARY(MAX) NOT NULL
-                entity.Property(e => e.PasswordHash)
-                      .IsRequired()
-                      .HasColumnType("VARBINARY(MAX)")
-                      .HasColumnName("PasswordHash");
+            entity.Property(e => e.FechaSubida)
+                  .HasColumnType("DATETIME2")
+                  .HasDefaultValueSql("SYSDATETIME()")
+                  .HasColumnName("FechaSubida");
 
-                entity.Property(e => e.PasswordSalt)
-                      .IsRequired()
-                      .HasColumnType("VARBINARY(MAX)")
-                      .HasColumnName("PasswordSalt");
-
-                // Estado TINYINT NOT NULL DEFAULT 1 (map boolean <-> tinyint)
-                entity.Property(e => e.Estado)
-                      .HasConversion<byte>()
-                      .HasColumnType("TINYINT")
-                      .HasDefaultValue((byte)1)
-                      .HasColumnName("Estado");
-
-                // CreadoPor / ActualizadoPor (fechas)
-                entity.Property(e => e.CreadoPor)
-                      .HasColumnType("DATETIME2")
-                      .HasColumnName("CreadoPor")
-                      .HasDefaultValueSql("SYSDATETIME()")
-                      .ValueGeneratedOnAdd()
-                      .IsRequired();
-
-                entity.Property(e => e.ActualizadoPor)
-                      .HasColumnType("DATETIME2")
-                      .HasColumnName("ActualizadoPor")
-                      .IsRequired(false);
-            });
-        }
+            entity.Property(e => e.FechaFirma)
+                  .HasColumnType("DATETIME2")
+                  .HasColumnName("FechaFirma")
+                  .IsRequired(false);
+        });
     }
 }

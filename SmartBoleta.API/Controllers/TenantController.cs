@@ -1,13 +1,16 @@
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SmartBoleta.API.Controllers.Request;
 using SmartBoleta.Application.Modules.Tenants.Command;
 using SmartBoleta.Application.Modules.Tenants.Query;
+using SmartBoleta.Domain;
 
 namespace SmartBoleta.API.Controllers;
 
 [ApiController]
 [Route("api/tenants")]
+[Authorize(Roles = Roles.Admin)]
 public class TenantController : ControllerBase
 {
     private readonly ISender _mediator;
@@ -18,33 +21,23 @@ public class TenantController : ControllerBase
     }
 
     [HttpGet("{id}")]
-    public async Task<IActionResult> ObtenerTenant(
-        Guid id,
-        CancellationToken cancellationToken
-    )
+    public async Task<IActionResult> ObtenerTenant(Guid id, CancellationToken cancellationToken)
     {
-        var query = new ObtenerTenantQuery(id);
-        var resultado = await _mediator.Send(query,cancellationToken);
-        return resultado.IsSuccess ? Ok(resultado) : NotFound();
+        var resultado = await _mediator.Send(new ObtenerTenantQuery(id), cancellationToken);
+        return resultado.IsSuccess ? Ok(resultado.Value) : NotFound(resultado.Error);
     }
 
-
-    [HttpGet()]
+    [HttpGet]
     public async Task<IActionResult> ObtenerTenants(CancellationToken cancellationToken)
     {
-        var query = new ObtenerTenantsQuery();
-        var result = await _mediator.Send(query, cancellationToken);
-        return Ok(result);
+        var resultado = await _mediator.Send(new ObtenerTenantsQuery(), cancellationToken);
+        return Ok(resultado.Value);
     }
 
     [HttpPost]
-    public async Task<IActionResult> CrearTenant(
-        CrearTenantRequest request,
-        CancellationToken cancellationToken
-    )
+    public async Task<IActionResult> CrearTenant([FromBody] CrearTenantRequest request, CancellationToken cancellationToken)
     {
-        var command = new CrearTenantCommand
-        (
+        var command = new CrearTenantCommand(
             request.NombreComercial!,
             request.Ruc!,
             request.LogoUrl!,
@@ -52,12 +45,9 @@ public class TenantController : ControllerBase
             request.FaviconUrl!
         );
 
-        var resultado = await _mediator.Send(command,cancellationToken);
-
-        if (resultado.IsSuccess)
-        {
-            return CreatedAtAction(nameof(ObtenerTenants), new { id = resultado.Value } , resultado.Value );
-        }
-        return BadRequest(resultado.Error);
+        var resultado = await _mediator.Send(command, cancellationToken);
+        return resultado.IsSuccess
+            ? CreatedAtAction(nameof(ObtenerTenant), new { id = resultado.Value }, new { id = resultado.Value })
+            : BadRequest(resultado.Error);
     }
 }

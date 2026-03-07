@@ -1,5 +1,7 @@
-
+using FluentValidation;
+using MediatR;
 using Microsoft.Extensions.DependencyInjection;
+using SmartBoleta.Application.Behaviors;
 
 namespace SmartBoleta.Application;
 
@@ -11,7 +13,10 @@ public static class DependencyInjection
             cfg.RegisterServicesFromAssembly(typeof(DependencyInjection).Assembly)
         );
 
+        services.AddScoped(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
+
+        services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly, includeInternalTypes: true);
+
         return services;
     }
-
 }
