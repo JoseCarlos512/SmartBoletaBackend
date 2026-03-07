@@ -4,6 +4,7 @@ using Hangfire;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Serilog;
 using SmartBoleta.API.Middleware;
 using SmartBoleta.Application;
 using SmartBoleta.Domain.Abstractions.Security;
@@ -11,6 +12,10 @@ using SmartBoleta.Infrastructure;
 using SmartBoleta.Infrastructure.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Host.UseSerilog((context, config) =>
+    config.ReadFrom.Configuration(context.Configuration)
+);
 
 // Controllers — serialize enums as strings
 builder.Services.AddControllers()
@@ -85,6 +90,7 @@ builder.Services.AddInfrastructure(builder.Configuration);
 var app = builder.Build();
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
+app.UseSerilogRequestLogging();
 
 if (app.Environment.IsDevelopment())
 {
