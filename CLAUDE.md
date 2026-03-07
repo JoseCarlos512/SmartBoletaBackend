@@ -27,8 +27,8 @@ The API runs at `https://localhost:7xxx` with Swagger at `/swagger/index.html` i
 
 | Project | Role |
 |---|---|
-| `SmartBoleta.Domain` | Entities, `BaseEntity`, `Result`/`Error`, repository interfaces, security interfaces |
-| `SmartBoleta.Infrastructure` | EF Core (`SmartBoletaDbContext`), repositories, `JwtTokenService`, `Pbkdf2PasswordHasher`, migrations |
+| `SmartBoleta.Domain` | Entities, `BaseEntity`, `Result`/`Error`, repository interfaces, `ISqlConnectionFactory`, security interfaces |
+| `SmartBoleta.Infrastructure` | EF Core (`SmartBoletaDbContext`), write repositories, `SqlConnectionFactory`, `JwtTokenService`, `Pbkdf2PasswordHasher`, migrations |
 | `SmartBoleta.Application` | MediatR commands/queries, handlers, DTOs |
 | `SmartBoleta.API` | Controllers, request models, `Program.cs` |
 
@@ -54,6 +54,12 @@ Application/
 ```
 
 **Controllers** inject `ISender` (MediatR), map HTTP requests to commands/queries, and return `Ok`/`BadRequest`/`NotFound` based on `resultado.IsSuccess`.
+
+**Hybrid data access (EF Core + Dapper)**
+- **Commands (writes)** → repository interfaces (`ITenantRepository`, `IUsuarioRepository`) → EF Core implementations. Repository interfaces contain only write methods (`AddAsync`) plus any reads needed by command logic (e.g. `ObtenerUsuarioPorCorreo` for login).
+- **Queries (reads)** → query handlers inject `ISqlConnectionFactory` (Domain) and use Dapper directly. No repository indirection — handlers own their SQL and project straight to DTOs.
+
+`SqlConnectionFactory` (Infrastructure) creates a fresh `SqlConnection` per call; handlers dispose it via `using`. Column aliases are required in SQL because DB columns differ from DTO property names (e.g. `TenantId AS Id`, `RUC AS Ruc`, `CAST(Estado AS BIT) AS Estado`).
 
 **Database** — SQL Server with EF Core. `UseSnakeCaseNamingConvention()` is called but entity configurations in `OnModelCreating` override column names explicitly. PKs use `NEWSEQUENTIALID()`. Boolean fields mapped to `TINYINT`.
 
