@@ -1,15 +1,16 @@
-using System.Text;
-using System.Text.Json.Serialization;
 using Hangfire;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Serilog;
+using SmartBoleta.API.DataSeeder;
 using SmartBoleta.API.Middleware;
 using SmartBoleta.Application;
 using SmartBoleta.Domain.Abstractions.Security;
 using SmartBoleta.Infrastructure;
 using SmartBoleta.Infrastructure.Hubs;
+using System.Text;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -57,6 +58,19 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization();
 
+
+// CORS (solo temporal para localhost:4200)
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAngularDev", policy =>
+    {
+        policy.WithOrigins("http://localhost:4200")
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+    });
+});
+
 // Swagger with JWT support
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -97,8 +111,10 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
     app.UseHangfireDashboard("/hangfire");
+    await DataSeeder.SeedAdminUsuarioAsync(app.Services);
 }
 
+app.UseCors("AllowAngularDev");
 app.UseAuthentication();
 app.UseAuthorization();
 

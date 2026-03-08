@@ -96,4 +96,6 @@ _ReSharper*/
 # Dependencies
 node_modules/
 # Logs
-logs/
+Logs/
+# Storage
+Storage/
