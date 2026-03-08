@@ -15,4 +15,7 @@ internal sealed class HangfireJobScheduler : IJobScheduler
 
     public void EnqueueOcrJob(Guid boletaId)
         => _backgroundJobClient.Enqueue<OcrBackgroundJob>(job => job.ProcesarAsync(boletaId));
+
+    public void EnqueueCargaMasivaJob(Guid cargaMasivaId)
+        => _backgroundJobClient.Enqueue<CargaMasivaBackgroundJob>(job => job.ProcesarAsync(cargaMasivaId));
 }

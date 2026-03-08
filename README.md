@@ -116,21 +116,62 @@ MiBoleta es una plataforma para la gestión y distribución de boletas digitales
 
 ## 9) OCR — detección de texto en ficheros
 
-Opciones y recomendaciones:
+**Implementación actual:** `LocalOcrService` usa **PdfPig** (`UglyToad.PdfPig`) para extraer texto de PDFs basados en texto sin dependencias externas.
 
-* **Opción cloud (recomendada si presupuesto lo permite):** Azure Cognitive Services (OCR / Read API) o Google Vision — alta precisión, soporte PDF multi-page y layout detection.
-* **Opción local (sin costos externos):** Tesseract OCR (recomendado para PoC o privacidad), requiere preprocesamiento (deskew, binarization) para mejores resultados.
-* Flujo sugerido: al subir archivo → persistir metadatos → encolar job OCR → extraer texto y entidades (DNI, nombres, montos) → vincular boleta al usuario → notificar resultado (SignalR / email).
-* Guardar logs/resultado OCR y confidence scores para auditoría.
+**Identificación de usuario en 3 estrategias en cascada:**
+1. Patrón explícito: `DNI: 12345678` / `D.N.I.: 12345678` → cruza con campo `DNI` de `Usuarios`
+2. Secuencia de 8 dígitos en cualquier parte del texto → cruza con todos los DNIs del tenant
+3. Nombre completo del usuario (normalizado sin tildes ni ñ) → búsqueda en el texto extraído
+
+**Para PDFs escaneados (imágenes):** integrar Tesseract:
+```bash
+dotnet add package Tesseract  # requiere archivos .traineddata de idioma
+```
+**Para alta precisión en producción:** Azure Cognitive Services:
+```bash
+dotnet add package Azure.AI.Vision.ImageAnalysis
+```
+
+Flujo: subir archivo → extraer texto → identificar usuario por DNI/nombre → vincular boleta → notificar vía SignalR.
 
 ---
 
-## 10) Carga masiva y procesamiento en segundo plano
+## 10) Carga masiva y procesamiento en segundo plano (Hangfire)
 
-* **Hangfire**: scheduler + dashboard para jobs recurrentes y procesamiento en background. Bueno para jobs de larga duración y retry.
-* **Colas (cuando se requiere alto throughput):** RabbitMQ / Azure Service Bus / AWS SQS + workers escalables.
-* Diseño: uploader en frontend sube archivos en lotes; backend recibe y crea jobs por archivo/registro; workers procesan OCR, validaciones y persistencia.
-* Reporte de progreso: SignalR para feedback en la UI.
+**Implementación actual — flujo completo:**
+
+```
+POST /api/boletas/masiva  (multipart/form-data, hasta 500 MB)
+  Body: { Periodo: "2024-01", Archivos: [file1.pdf, file2.pdf, ...] }
+  → Guarda todos los archivos en storage (./storage/)
+  → Crea CargaMasiva + CargaMasivaArchivo[] en DB (estado: Pendiente)
+  → Encola CargaMasivaBackgroundJob en Hangfire
+  → Responde 202 Accepted con { cargaMasivaId: "..." }
+
+[Hangfire — CargaMasivaBackgroundJob]
+  Por cada archivo (secuencial):
+    1. OCR → extrae texto del PDF (PdfPig)
+    2. Identifica usuario (DNI regex → nombre)
+    3a. Si encontrado → crea Boleta en estado Disponible
+                     → SignalR: NotificarUsuarioAsync("boleta_cargada", { boletaId, periodo, archivoNombre })
+    3b. Si no encontrado → marca CargaMasivaArchivo como Fallido con motivo
+  Al terminar → SignalR: NotificarUsuarioAsync al solicitante ("carga_masiva_completada", { estado, exitosos, fallidos })
+
+GET /api/boletas/masiva/{id}
+  → Estado, progreso y resultado por archivo (requiere rol Admin o Manager)
+```
+
+**Entidades:**
+- `CargaMasiva` — seguimiento del lote: `TotalArchivos`, `ArchivosProcessados`, `ArchivosExitosos`, `ArchivosFallidos`, `Estado` (Pendiente/Procesando/Completado/CompletadoConErrores/Fallido)
+- `CargaMasivaArchivo` — resultado por archivo: `UsuarioIdentificadoId`, `BoletaId`, `ErrorMensaje`, `TextoOcr`
+
+**Eventos SignalR del cliente:**
+```javascript
+connection.on("boleta_cargada", (data) => { /* { boletaId, periodo, archivoNombre } */ });
+connection.on("carga_masiva_completada", (data) => { /* { cargaMasivaId, estado, archivosExitosos, archivosFallidos } */ });
+```
+
+**Hangfire dashboard:** `/hangfire` (solo en Development).
 
 ---
 

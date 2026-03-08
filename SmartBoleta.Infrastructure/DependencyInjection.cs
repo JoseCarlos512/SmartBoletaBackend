@@ -30,6 +30,7 @@ public static class DependencyInjection
         services.AddScoped<ITenantRepository, TenantRepository>();
         services.AddScoped<IUsuarioRepository, UsuarioRepository>();
         services.AddScoped<IBoletaRepository, BoletaRepository>();
+        services.AddScoped<ICargaMasivaRepository, CargaMasivaRepository>();
 
         // Security
         services.AddScoped<IJwtTokenService, JwtTokenService>();
@@ -60,6 +61,7 @@ public static class DependencyInjection
         services.AddHangfireServer();
         services.AddScoped<IJobScheduler, HangfireJobScheduler>();
         services.AddScoped<OcrBackgroundJob>();
+        services.AddScoped<CargaMasivaBackgroundJob>();
 
         // Dapper connection factory
         services.AddScoped<ISqlConnectionFactory, SqlConnectionFactory>();

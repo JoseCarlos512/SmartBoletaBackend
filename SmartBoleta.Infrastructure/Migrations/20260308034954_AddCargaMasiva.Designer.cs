@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SmartBoleta.Infrastructure;
 
@@ -11,9 +12,11 @@ using SmartBoleta.Infrastructure;
 namespace SmartBoleta.Infrastructure.Migrations
 {
     [DbContext(typeof(SmartBoletaDbContext))]
-    partial class SmartBoletaDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260308034954_AddCargaMasiva")]
+    partial class AddCargaMasiva
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

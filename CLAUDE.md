@@ -48,16 +48,26 @@ Application/
   Behaviors/ValidationBehavior.cs
   Modules/
     Boletas/
-      Command/SubirBoletaCommand.cs    # record + handler + validator (internal sealed)
+      Command/SubirBoletaCommand.cs         # record + handler + validator (internal sealed)
       Command/FirmarBoletaCommand.cs
-      Query/ObtenerBoletaQuery.cs      # Dapper, projects to BoletaDto
+      Command/SubirBoletasMasivasCommand.cs # carga masiva — devuelve Guid (CargaMasivaId)
+      Query/ObtenerBoletaQuery.cs           # Dapper, projects to BoletaDto
       Query/ObtenerBoletasPorUsuarioQuery.cs
-      Query/ObtenerBoletasPorTenantQuery.cs   # paginated (Pagina, TamanoPagina)
+      Query/ObtenerBoletasPorTenantQuery.cs # paginated (Pagina, TamanoPagina)
       DTOs/BoletaDto.cs
+    CargaMasiva/
+      Query/ObtenerCargaMasivaQuery.cs      # Dapper multi-map, projects to CargaMasivaDto
+      DTOs/CargaMasivaDto.cs                # incluye List<CargaMasivaArchivoDto>
     Tenants/...
     Usuarios/...
     Auths/...
   Abstractions/Messaging/              # ICommand, IQuery, ICommandHandler, IQueryHandler
+```
+
+**Namespace conflict warning** — The folder `Application/Modules/CargaMasiva/` creates a namespace that conflicts with the domain class `SmartBoleta.Domain.CargaMasiva`. In any Application file that is inside the `CargaMasiva` module folder AND needs to instantiate `CargaMasiva` entities, use aliases:
+```csharp
+using CargaMasivaEntity = SmartBoleta.Domain.CargaMasiva;
+using CargaMasivaArchivoEntity = SmartBoleta.Domain.CargaMasivaArchivo;
 ```
 
 **Hybrid data access (EF Core + Dapper)**
@@ -76,11 +86,18 @@ Column alias rules for Dapper SQL: `BoletaId AS Id`, `TenantId AS Id` (Tenants),
 
 **SignalR** — `NotificacionHub` at `/hubs/notificaciones`. Clients call `UnirseATenant(tenantId)` to join a group. JWT passed via `?access_token=` query string for WebSocket connections. `INotificationService` (`SignalRNotificationService`) sends by tenant group or by user.
 
-**Background jobs (Hangfire)** — SQL Server storage, same connection string as EF Core. `IJobScheduler.EnqueueOcrJob(boletaId)` enqueues `OcrBackgroundJob.ProcesarAsync`. Job flow: update estado → `ProcesandoOcr` → call `IOcrService.ExtraerTextoAsync` → `ActualizarOcr` → `Disponible` → notify via SignalR.
+**Background jobs (Hangfire)** — SQL Server storage, same connection string as EF Core. Two job types:
+- `IJobScheduler.EnqueueOcrJob(boletaId)` → `OcrBackgroundJob.ProcesarAsync`: individual boleta flow: update estado → `ProcesandoOcr` → OCR → `ActualizarOcr` → `Disponible` → notify via SignalR.
+- `IJobScheduler.EnqueueCargaMasivaJob(cargaMasivaId)` → `CargaMasivaBackgroundJob.ProcesarAsync`: iterates each `CargaMasivaArchivo`, runs OCR, identifies user (DNI regex → name fallback), creates `Boleta` if found, notifies each user (`"boleta_cargada"`), notifies the uploader at completion (`"carga_masiva_completada"`).
 
 **Storage** — `IStorageService` / `LocalStorageService` saves files to `Storage:LocalPath` config path (default `./storage/`). Returns a unique filename as the URL identifier.
 
-**OCR** — `LocalOcrService` is a stub returning `string.Empty`. Replace with Tesseract (`Tesseract` NuGet) or Azure Cognitive Services (`Azure.AI.Vision.ImageAnalysis`).
+**OCR** — `LocalOcrService` uses **PdfPig** (`UglyToad.PdfPig 0.1.9-alpha001-patch1`) to extract text from text-based PDFs. For scanned PDFs (images) integrate Tesseract (`Tesseract` NuGet). For production use Azure Cognitive Services (`Azure.AI.Vision.ImageAnalysis`).
+
+**Bulk upload OCR identification** — `CargaMasivaBackgroundJob` identifies the user from OCR text using three strategies in order:
+1. Regex `(?:DNI|D\.N\.I\.?|Nro\.?\s*Doc\.?)[:\s]*(\d{8})` → match against `Usuario.DNI`
+2. Any 8-digit sequence → match against all tenant `Usuario.DNI` values
+3. Normalized full name (accents/ñ stripped) substring match in OCR text
 
 **DI registration** — `AddApplication()` wires MediatR + `ValidationBehavior` + validators. `AddInfrastructure(config)` wires EF Core, repositories, security, storage, OCR, SignalR, Hangfire, and `SqlConnectionFactory`.
 
@@ -91,6 +108,8 @@ Column alias rules for Dapper SQL: `BoletaId AS Id`, `TenantId AS Id` (Tenants),
 | `Tenant` | NombreComercial, Ruc, LogoUrl, ColorPrimario, FaviconUrl, Estado | Multi-tenant company |
 | `Usuario` | TenantId, Nombre, Correo, DNI, Rol, PasswordHash, PasswordSalt, Estado | PBKDF2 password; Rol defaults to "User" |
 | `Boleta` | TenantId, UsuarioId, Periodo (YYYY-MM), ArchivoNombre, ArchivoUrl, Estado, TextoOcr, FechaSubida, FechaFirma | Created via `Boleta.Create(...)`, signed via `boleta.Firmar()` which enforces `Estado == Disponible` |
+| `CargaMasiva` | TenantId, UsuarioSolicitanteId, Periodo, Estado, TotalArchivos, ArchivosProcessados, ArchivosExitosos, ArchivosFallidos, FechaInicio, FechaFin | Bulk upload batch; `Estado` enum: Pendiente/Procesando/Completado/CompletadoConErrores/Fallido |
+| `CargaMasivaArchivo` | CargaMasivaId, ArchivoNombre, ArchivoUrl, ContentType, Estado, UsuarioIdentificadoId, BoletaId, ErrorMensaje, TextoOcr | Per-file result within a batch; `Estado` enum: Pendiente/Procesando/Exitoso/Fallido |
 
 ## Conventions
 
@@ -99,3 +118,6 @@ Column alias rules for Dapper SQL: `BoletaId AS Id`, `TenantId AS Id` (Tenants),
 - Each command file contains: `record Command`, `internal sealed class Handler`, `internal sealed class Validator`.
 - New service interfaces go in `SmartBoleta.Domain/Abstractions/`; implementations go in `SmartBoleta.Infrastructure/Services/`.
 - `BoletaEstado` Dapper queries do **not** need `CAST` — int-to-enum mapping is automatic. `Estado` on Tenant/Usuario is `TINYINT`/`bool` and **does** need `CAST(Estado AS BIT) AS Estado`.
+- `CargaMasivaEstado` and `CargaMasivaArchivoEstado` store as `int` (same as `BoletaEstado`) — no CAST needed in Dapper.
+- Bulk upload endpoint returns **202 Accepted** (not 201 Created) because processing is async. Use `AcceptedAtAction` pointing to `ObtenerCargaMasiva`.
+- Dapper multi-map queries (parent + child list) require `splitOn: "Id"` and a dictionary accumulator pattern — see `ObtenerCargaMasivaQuery` for the reference implementation.

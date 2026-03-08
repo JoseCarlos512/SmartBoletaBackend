@@ -11,6 +11,8 @@ public class SmartBoletaDbContext : DbContext
     public required DbSet<Tenant> Tenants { get; set; }
     public required DbSet<Usuario> Usuarios { get; set; }
     public required DbSet<Boleta> Boletas { get; set; }
+    public required DbSet<CargaMasiva> CargaMasivas { get; set; }
+    public required DbSet<CargaMasivaArchivo> CargaMasivaArchivos { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -131,6 +133,79 @@ public class SmartBoletaDbContext : DbContext
                   .HasColumnType("DATETIME2")
                   .HasColumnName("FechaFirma")
                   .IsRequired(false);
+        });
+
+        modelBuilder.Entity<CargaMasiva>(entity =>
+        {
+            entity.ToTable("CargaMasivas");
+            entity.HasKey(e => e.Id).HasName("PK_CargaMasivas");
+            entity.Property(e => e.Id)
+                  .HasColumnName("CargaMasivaId")
+                  .HasDefaultValueSql("NEWSEQUENTIALID()");
+
+            entity.Property(e => e.TenantId).IsRequired().HasColumnName("TenantId");
+            entity.HasOne(e => e.Tenant)
+                  .WithMany()
+                  .HasForeignKey(e => e.TenantId)
+                  .OnDelete(DeleteBehavior.NoAction)
+                  .HasConstraintName("FK_CargaMasivas_Tenants");
+
+            entity.Property(e => e.UsuarioSolicitanteId).IsRequired().HasColumnName("UsuarioSolicitanteId");
+            entity.HasOne(e => e.UsuarioSolicitante)
+                  .WithMany()
+                  .HasForeignKey(e => e.UsuarioSolicitanteId)
+                  .OnDelete(DeleteBehavior.NoAction)
+                  .HasConstraintName("FK_CargaMasivas_Usuarios");
+
+            entity.Property(e => e.Periodo).IsRequired().HasMaxLength(10).HasColumnName("Periodo");
+
+            entity.Property(e => e.Estado)
+                  .HasConversion<int>()
+                  .HasColumnName("Estado");
+
+            entity.Property(e => e.TotalArchivos).HasColumnName("TotalArchivos");
+            entity.Property(e => e.ArchivosProcessados).HasColumnName("ArchivosProcessados");
+            entity.Property(e => e.ArchivosExitosos).HasColumnName("ArchivosExitosos");
+            entity.Property(e => e.ArchivosFallidos).HasColumnName("ArchivosFallidos");
+
+            entity.Property(e => e.FechaInicio)
+                  .HasColumnType("DATETIME2")
+                  .HasDefaultValueSql("SYSDATETIME()")
+                  .HasColumnName("FechaInicio");
+
+            entity.Property(e => e.FechaFin)
+                  .HasColumnType("DATETIME2")
+                  .HasColumnName("FechaFin")
+                  .IsRequired(false);
+
+            entity.HasMany(e => e.Archivos)
+                  .WithOne(a => a.CargaMasiva)
+                  .HasForeignKey(a => a.CargaMasivaId)
+                  .OnDelete(DeleteBehavior.Cascade)
+                  .HasConstraintName("FK_CargaMasivaArchivos_CargaMasivas");
+        });
+
+        modelBuilder.Entity<CargaMasivaArchivo>(entity =>
+        {
+            entity.ToTable("CargaMasivaArchivos");
+            entity.HasKey(e => e.Id).HasName("PK_CargaMasivaArchivos");
+            entity.Property(e => e.Id)
+                  .HasColumnName("CargaMasivaArchivoId")
+                  .HasDefaultValueSql("NEWSEQUENTIALID()");
+
+            entity.Property(e => e.CargaMasivaId).IsRequired().HasColumnName("CargaMasivaId");
+            entity.Property(e => e.ArchivoNombre).IsRequired().HasMaxLength(255).HasColumnName("ArchivoNombre");
+            entity.Property(e => e.ArchivoUrl).IsRequired().HasMaxLength(500).HasColumnName("ArchivoUrl");
+            entity.Property(e => e.ContentType).IsRequired().HasMaxLength(100).HasColumnName("ContentType");
+
+            entity.Property(e => e.Estado)
+                  .HasConversion<int>()
+                  .HasColumnName("Estado");
+
+            entity.Property(e => e.UsuarioIdentificadoId).HasColumnName("UsuarioIdentificadoId").IsRequired(false);
+            entity.Property(e => e.BoletaId).HasColumnName("BoletaId").IsRequired(false);
+            entity.Property(e => e.ErrorMensaje).HasMaxLength(500).HasColumnName("ErrorMensaje").IsRequired(false);
+            entity.Property(e => e.TextoOcr).HasColumnType("NVARCHAR(MAX)").HasColumnName("TextoOcr").IsRequired(false);
         });
     }
 }

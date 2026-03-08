@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using SmartBoleta.API.Controllers.Request;
 using SmartBoleta.Application.Modules.Boletas.Command;
 using SmartBoleta.Application.Modules.Boletas.Query;
+using SmartBoleta.Application.Modules.CargaMasiva.Query;
 
 namespace SmartBoleta.API.Controllers;
 
@@ -75,6 +76,47 @@ public class BoletaController : ControllerBase
         return resultado.IsSuccess
             ? CreatedAtAction(nameof(ObtenerBoleta), new { id = resultado.Value }, new { id = resultado.Value })
             : BadRequest(resultado.Error);
+    }
+
+    [HttpPost("masiva")]
+    [Authorize(Roles = "Admin,Manager")]
+    [RequestSizeLimit(500 * 1024 * 1024)] // 500 MB para carga masiva
+    public async Task<IActionResult> SubirBoletasMasivas([FromForm] SubirBoletasMasivasRequest request, CancellationToken cancellationToken)
+    {
+        var tenantId = ObtenerTenantId();
+        var usuarioId = ObtenerUsuarioId();
+        if (tenantId is null || usuarioId is null) return Unauthorized();
+
+        var archivos = new List<ArchivoMasivo>();
+        foreach (var archivo in request.Archivos)
+        {
+            using var ms = new MemoryStream();
+            await archivo.CopyToAsync(ms, cancellationToken);
+            archivos.Add(new ArchivoMasivo(archivo.FileName, ms.ToArray(), archivo.ContentType));
+        }
+
+        var command = new SubirBoletasMasivasCommand(
+            TenantId: tenantId.Value,
+            UsuarioSolicitanteId: usuarioId.Value,
+            Periodo: request.Periodo,
+            Archivos: archivos
+        );
+
+        var resultado = await _mediator.Send(command, cancellationToken);
+        return resultado.IsSuccess
+            ? AcceptedAtAction(nameof(ObtenerCargaMasiva), new { id = resultado.Value }, new { cargaMasivaId = resultado.Value })
+            : BadRequest(resultado.Error);
+    }
+
+    [HttpGet("masiva/{id}")]
+    [Authorize(Roles = "Admin,Manager")]
+    public async Task<IActionResult> ObtenerCargaMasiva(Guid id, CancellationToken cancellationToken)
+    {
+        var tenantId = ObtenerTenantId();
+        if (tenantId is null) return Unauthorized();
+
+        var resultado = await _mediator.Send(new ObtenerCargaMasivaQuery(id, tenantId.Value), cancellationToken);
+        return resultado.IsSuccess ? Ok(resultado.Value) : NotFound(resultado.Error);
     }
 
     [HttpPut("{id}/firmar")]
